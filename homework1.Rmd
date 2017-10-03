@@ -1,0 +1,137 @@
+---
+title: "Learning From the Data, Homework 1"
+author: "Benjamin Jack"
+date: "10/3/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+set.seed(12) # Set a seed for reproducibility
+```
+
+### Setting up the Perceptron Learning Algorithm
+
+The following functions will generate a target line, random points, and run the PLA.
+
+```{r perceptron}
+# Load libraries for plotting
+library(ggplot2)
+library(cowplot)
+
+# Generate random two points for function f
+generate_line <- function() {
+points <- runif(n = 4, min = -1, max = 1)
+  x1 = points[1]
+  x2 = points[2]
+  y1 = points[3]
+  y2 = points[4]
+  # Calculate slope and intercept
+  slope <- (y2 - y1)/(x2 - x1)
+  intercept <- y1 - slope*x1
+  # Convert to weights representation (w0, w1, w2)
+  # y = mx + b
+  # 0 = mx + b - y
+  # 0 = b + m*x - 1*y
+  #     w0  w1    w2
+  c(intercept, slope, -1)
+}
+
+# Calculate random points
+generate_data <- function(N) {
+  x1 <- runif(n = N, min=-1, max=1)
+  x2 <- runif(n = N, min=-1, max=1)
+  x0 <- rep(1, N)
+  as.matrix(data.frame(x0 = x0, x1 = x1, x2 = x2))
+}
+
+run_perceptron <- function(N, max_iter=1000) {
+  w <- c(0,0,0)
+  data_points <- generate_data(N)
+  w_true <- generate_line()
+  # Generate true y's
+  y <- sign(w_true %*% t(data_points))
+  # Run perceptron until it converges
+  for (i in 1:max_iter) {
+    h_test <- sign(w %*% t(data_points))
+    missed_points <- which(h_test != y)
+    if (length(missed_points) == 0) {
+      break
+    }
+    if (length(missed_points) == 1) {
+      sel <- missed_points[1]
+    } else {
+      sel <- sample(missed_points, 1)
+    }
+    w <- w + y[sel]%*%data_points[sel,]
+  }
+  
+  out_of_sample_points <- generate_data(N)
+  out_of_sample_y <- sign(w_true %*% t(out_of_sample_points))
+  preds <- sign(w %*% t(out_of_sample_points))
+  missed <- sum(out_of_sample_y != preds)
+  
+  return(list(w, w_true, data_points, i, missed/N))
+}
+
+run_experiment <- function(N, iter=500) {
+  probs <- c()
+  converged_after <- c()
+  for (i in 1:iter) {
+   output <- run_perceptron(N)
+   converged_after <- c(converged_after, output[[4]])
+   probs <- c(probs, output[[5]])
+  }
+  return(c(mean(converged_after), mean(probs)))
+}
+
+```
+Here's a helper function to plot the points, the target function (solid line), and the predicted function (dashed line). 
+```{r}
+# Plot data points with ggplot2
+plot_perceptron <- function(w, w_true, data_points) {
+  colors <- factor(sign(w %*% t(data_points)))
+  ggplot(data = as.data.frame(data_points), aes(x = x1, y = x2, color = colors)) +
+    geom_point() +
+    geom_abline(slope = w[2]/-w[3], intercept = w[1]/-w[3], linetype="dashed") +
+    geom_abline(slope = w_true[2]/-w_true[3], intercept = w_true[1]/-w_true[3]) +
+    xlim(-1, 1) + ylim(-1, 1)
+}
+```
+
+#### N = 10
+```{r n_10_plot}
+output <- run_perceptron(10)
+plot_perceptron(output[[1]], output[[2]], output[[3]])
+```
+
+#### N = 100
+```{r n_100_plot}
+output <- run_perceptron(100)
+plot_perceptron(output[[1]], output[[2]], output[[3]])
+```
+
+### Problem 7
+```{r prob7}
+output <- run_experiment(10)
+print(output[1])
+```
+
+### Problem 8
+```{r prob8}
+output <- run_experiment(10)
+print(output[2])
+```
+
+### Problem 9
+
+```{r prob9}
+output <- run_experiment(100)
+print(output[1])
+```
+
+### Problem 10
+```{r prob10}
+output <- run_experiment(100)
+print(output[2])
+```
