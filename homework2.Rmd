@@ -46,7 +46,7 @@ test_hoeff <- function(x, N=10, u, e=0.25) {
 
 output <- run_coin_experiment()
 
-test_hoeff(output$c_min, N=1000, u=0, e=0.03)
+test_hoeff(output$c_rand, N=10, u=0.5, e=0.1)
 test_hoeff(output$c_min, N=10, u=0.5, e=0.3)
 
 ```
@@ -211,8 +211,6 @@ run_nonlinear_regression <- function(N) {
   missed_out_of_sample <- sum(Y_out != preds_out_of_sample)
   return(list(W, X, missed_in_sample/N, missed_out_of_sample/1000))
 }
-
-run_nonlinear_regression(1000)
 
 run_experiment <- function(N, iter=500) {
   probs_in <- c()
