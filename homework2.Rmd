@@ -1,0 +1,230 @@
+---
+title: "Learning From the Data, Homework 2"
+author: "Benjamin Jack"
+date: "10/9/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+set.seed(12) # set seed for reproducibility
+```
+
+## Problem 1
+
+```{r prob1}
+
+flip_coins <- function(N=1000) {
+  coins <- list()
+  for (i in 1:N) {
+    sample_space <- c(0, 1)
+    coin_sample <- sample(x = sample_space, size = 10, replace = TRUE)
+    coins[[i]] <- coin_sample
+  }
+  c_1 <- sum(coins[[1]])/10
+  coin_sums <- lapply(coins, sum)
+  c_min <- min(unlist(coin_sums))/10
+  c_rand <- sum(sample(coins, size = 1)[[1]])/10
+  return(data.frame(c_1=c_1, c_min=c_min, c_rand=c_rand))
+}
+
+run_coin_experiment <- function(N=1000, iter=1000) {
+  results <- data.frame()
+  for (i in 1:iter) {
+    results <- rbind(results, flip_coins(N=N))
+  }
+  results
+}
+
+test_hoeff <- function(x, N=10, u, e=0.25) {
+  lhs <- sum(abs(x-u) > e)/length(x)
+  rhs <- 2*exp(-2*(e^2)*N)
+  print(abs(mean(x)-u))
+  print(lhs)
+  print(rhs)
+}
+
+output <- run_coin_experiment()
+
+test_hoeff(output$c_min, N=1000, u=0, e=0.03)
+test_hoeff(output$c_min, N=10, u=0.5, e=0.3)
+
+```
+
+### Setting up linear regression
+
+```{r perceptron}
+# Load libraries for plotting
+library(ggplot2)
+library(cowplot)
+
+# Generate random two points for function f
+generate_line <- function() {
+  points <- runif(n = 4, min = -1, max = 1)
+  x1 = points[1]
+  x2 = points[2]
+  y1 = points[3]
+  y2 = points[4]
+  # Calculate slope and intercept
+  slope <- (y2 - y1)/(x2 - x1)
+  intercept <- y1 - slope*x1
+  # Convert to weights representation (w0, w1, w2)
+  # y = mx + b
+  # 0 = mx + b - y
+  # 0 = b + m*x - 1*y
+  #     w0  w1    w2
+  c(intercept, slope, -1)
+}
+
+# Calculate random points
+generate_data <- function(N) {
+  x1 <- runif(n = N, min=-1, max=1)
+  x2 <- runif(n = N, min=-1, max=1)
+  x0 <- rep(1, N)
+  as.matrix(data.frame(x0 = x0, x1 = x1, x2 = x2))
+}
+
+run_linear_regression <- function(N) {
+  X <- generate_data(N)
+  W_true <- generate_line()
+  # Generate true y's
+  Y <- sign(W_true %*% t(X))
+  # Generate W via linear regression
+  W <- solve(t(X) %*% X) %*% t(X) %*% t(Y)
+  out_of_sample_points <- generate_data(1000)
+  out_of_sample_y <- sign(W_true %*% t(out_of_sample_points))
+  preds_in_sample <- sign(t(W) %*% t(X))
+  missed_in_sample <- sum(Y != preds_in_sample)
+  preds_out_of_sample <- sign(t(W) %*% t(out_of_sample_points))
+  missed_out_of_sample <- sum(out_of_sample_y != preds_out_of_sample)
+  return(list(W, W_true, X, missed_in_sample/N, missed_out_of_sample/1000))
+}
+
+run_experiment <- function(N, iter=500) {
+  probs_in <- c()
+  probs_out <- c()
+  for (i in 1:iter) {
+   output <- run_linear_regression(N)
+   probs_in <- c(probs_in, output[[4]])
+   probs_out <- c(probs_out, output[[5]])
+  }
+  return(c(mean(probs_in), mean(probs_out)))
+}
+
+run_experiment(100, iter = 1000)
+
+run_perceptron_w_regression <- function(N, max_iter=1000) {
+  X <- generate_data(N)
+  W_true <- generate_line()
+  # Generate true y's
+  Y <- sign(W_true %*% t(X))
+  W <- solve(t(X) %*% X) %*% t(X) %*% t(Y)
+  W <- t(W)
+  # Run perceptron until it converges
+  for (i in 1:max_iter) {
+    h_test <- sign(W %*% t(X))
+    missed_points <- which(h_test != Y)
+    if (length(missed_points) == 0) {
+      break
+    }
+    if (length(missed_points) == 1) {
+      sel <- missed_points[1]
+    } else {
+      sel <- sample(missed_points, 1)
+    }
+    W <- W + Y[sel]%*%X[sel,]
+  }
+  
+  out_of_sample_points <- generate_data(N)
+  out_of_sample_y <- sign(W_true %*% t(out_of_sample_points))
+  preds <- sign(W %*% t(out_of_sample_points))
+  missed <- sum(out_of_sample_y != preds)
+  
+  return(list(W, W_true, X, i, missed/N))
+}
+
+run_perceptron_experiment <- function(N, iter=500) {
+  probs <- c()
+  converged_after <- c()
+  for (i in 1:iter) {
+   output <- run_perceptron_w_regression(N)
+   converged_after <- c(converged_after, output[[4]])
+   probs <- c(probs, output[[5]])
+  }
+  return(c(mean(converged_after), mean(probs)))
+}
+
+run_perceptron_experiment(10)
+```
+
+```{r}
+# Plot data points with ggplot2
+plot_regression <- function(W, W_true, X) {
+  colors <- factor(sign(W_true %*% t(X)))
+  print(W[1])
+  print(W[2])
+  print(W[3])
+  ggplot(data = as.data.frame(X), aes(x = x1, y = x2, color = colors)) +
+    geom_point() +
+    geom_abline(slope = W[2]/-W[3], intercept = W[1]/-W[3], linetype="dashed") +
+    geom_abline(slope = W_true[2]/-W_true[3], intercept = W_true[1]/-W_true[3]) +
+    xlim(-1, 1) + ylim(-1, 1)
+}
+output <- run_linear_regression(100)
+plot_regression(output[[1]], output[[2]], output[[3]])
+```
+
+```{r}
+
+# Generate random two points for function f
+
+# Calculate random points
+generate_data <- function(N) {
+  x1 <- runif(n = N, min=-1, max=1)
+  x2 <- runif(n = N, min=-1, max=1)
+  x0 <- rep(1, N)
+  as.matrix(data.frame(x0 = x0, x1 = x1, x2 = x2))
+}
+
+generate_data_transform <- function(N) {
+  x1 <- runif(n = N, min=-1, max=1)
+  x2 <- runif(n = N, min=-1, max=1)
+  x0 <- rep(1, N)
+  as.matrix(data.frame(x0 = x0, x1 = x1, x2 = x2, x3=x1*x2, x4=x1^2, x5=x2^2))
+}
+
+run_nonlinear_regression <- function(N) {
+  X <- generate_data_transform(N)
+  # Generate true y's
+  Y <- sign(X[,'x1']^2 + X[,'x2']^2 - 0.6)
+  flip <- sample(N, size = 0.1*N)
+  Y[flip] <- Y[flip]*-1
+  # Generate W via linear regression
+  W <- solve(t(X) %*% X) %*% t(X) %*% Y
+  X_out <- generate_data_transform(1000)
+  Y_out <- sign(X_out[,'x1']^2 + X_out[,'x2']^2 - 0.6)
+  flip <- sample(N, size = 0.1*N)
+  Y_out[flip] <- Y_out[flip]*-1
+  preds_in_sample <- sign(t(W) %*% t(X))
+  missed_in_sample <- sum(Y != preds_in_sample)
+  preds_out_of_sample <- sign(t(W) %*% t(X_out))
+  missed_out_of_sample <- sum(Y_out != preds_out_of_sample)
+  return(list(W, X, missed_in_sample/N, missed_out_of_sample/1000))
+}
+
+run_nonlinear_regression(1000)
+
+run_experiment <- function(N, iter=500) {
+  probs_in <- c()
+  probs_out <- c()
+  for (i in 1:iter) {
+   output <- run_nonlinear_regression(N)
+   probs_in <- c(probs_in, output[[3]])
+   probs_out <- c(probs_out, output[[4]])
+  }
+  return(c(mean(probs_in), mean(probs_out)))
+}
+
+run_experiment(1000, iter = 1000)
+
+```
